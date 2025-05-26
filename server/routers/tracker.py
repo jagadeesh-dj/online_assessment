@@ -2,6 +2,7 @@ from server import api
 from flask import request, jsonify
 from server.models.tracker import Tracker
 from datetime import datetime
+from sqlalchemy import and_
 
 @api.route('/user/<username>/steps', methods=['POST'])
 def tracker(username):
@@ -14,10 +15,15 @@ def tracker(username):
     if date:
         date = datetime.strftime(date, "%Y-%m-%d")
 
-    if steps < 0:
-        return
-        
-    instance = Tracker(username = username, date = date, steps = steps)
-    instance.save()
+
+    instance = Tracker.query.filter(and_(Tracker.username==username, Tracker.date==date)).first()
+    if instance:
+        instance.steps+=1
+        instance.save()
+    else:
+        instance.username=username
+        instance.date=date
+        instance.steps=1
+        instance.save()
 
     return jsonify({"message": "steps count updated"}), 200
