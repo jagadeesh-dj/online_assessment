@@ -15,15 +15,15 @@ def tracker(username):
     if date:
         date = datetime.strftime(date, "%Y-%m-%d")
 
-
-    instance = Tracker.query.filter(and_(Tracker.username==username, Tracker.date==date)).first()
-    if instance:
-        instance.steps+=1
-        instance.save()
-    else:
-        instance.username=username
-        instance.date=date
-        instance.steps=1
-        instance.save()
+    if steps>0:
+        instance = Tracker.query.filter(and_(Tracker.username==username, Tracker.date==date)).first()
+        if instance:
+            instance.steps=steps
+            instance.save()
+        else:
+            instance.username=username
+            instance.date=date
+            instance.steps=steps
+            instance.save()
 
     return jsonify({"message": "steps count updated"}), 200
