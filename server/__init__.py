@@ -9,4 +9,6 @@ def create_app():
 
     db.init_app(app)
     
+    app.register_blueprint(api)
+    
     return app

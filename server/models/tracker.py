@@ -8,7 +8,7 @@ class Tracker(db.Model):
 
     id = Column(Integer,autoincrement=True)
     username = Column(VARCHAR(255), nullable=False, unique=True)
-    date = Column(Date, nullable=False)
+    date = Column(DATE, nullable=False)
     steps = Column(BIGINT(), nullable=False)
 
     def save(self):

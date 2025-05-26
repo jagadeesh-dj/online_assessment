@@ -1,6 +1,7 @@
 from server import api
 from flask import request, jsonify
 from server.models.tracker import Tracker
+from datetime import datetime
 
 @api.route('/user/<username>/steps', methods=['POST'])
 def tracker(username):
@@ -10,6 +11,12 @@ def tracker(username):
     date = data.get('date')
     steps = data.get('steps')
 
+    if date:
+        date = datetime.strftime(date, "%Y-%m-%d")
+
+    if steps < 0:
+        return
+        
     instance = Tracker(username = username, date = date, steps = steps)
     instance.save()
 
