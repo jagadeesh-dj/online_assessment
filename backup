@@ -1,0 +1,333 @@
+import subprocess
+import os
+from pathlib import Path
+from bs4 import BeautifulSoup
+import json
+
+
+def run_all_tests_and_generate_reports():
+    """Run all pytest tests once, then split the master HTML report into per-test-case reports."""
+    reports_dir = "reports"
+    os.makedirs(reports_dir, exist_ok=True)
+
+    master_report = os.path.join(reports_dir, "master_report.html")
+
+    # Run all tests at once
+    print("Running full pytest suite...")
+    subprocess.run(
+        [
+            "pytest",
+            "powerbi_test_framework/tests",
+            "-v",
+            "-s",
+            f"--html={master_report}",
+            "--self-contained-html"
+        ],
+        check=False,
+    )
+
+    print(f"✅ Master report generated: {master_report}")
+
+    print("Parsing master report and splitting by test case...")
+    with open(master_report, "r", encoding="utf-8") as f:
+        content = f.read()
+        soup = BeautifulSoup(content, "html.parser")
+
+    # Find the data container with JSON blob
+    data_container = soup.find("div", id="data-container")
+
+    if not data_container or not data_container.get("data-jsonblob"):
+        print("❌ Error: Could not find data-jsonblob in the HTML")
+        return
+
+    # Parse the JSON data
+    json_data = json.loads(data_container["data-jsonblob"])
+
+    if "tests" not in json_data:
+        print("❌ Error: No tests found in JSON data")
+        return
+
+    test_count = sum(len(tests) for tests in json_data["tests"].values())
+    print(f"Found {test_count} test cases in master report")
+
+    # Process each test
+    for test_path, test_details_list in json_data["tests"].items():
+        for test_detail in test_details_list:
+            test_name = test_detail.get("testId")
+            if not test_name:
+                continue
+
+            # Create safe filename
+            test_name_safe = test_name.split("::")[-1].strip()
+
+            # Create a copy of the original HTML
+            new_soup = BeautifulSoup(content, "html.parser")
+
+            # Find and update the data container
+            new_data_container = new_soup.find("div", id="data-container")
+
+            # Create new JSON data with only this test
+            new_json_data = {
+                "environment": json_data.get("environment", {}),
+                "tests": {test_path: [test_detail]},
+                "renderCollapsed": json_data.get("renderCollapsed", []),
+                "initialSort": json_data.get("initialSort", "result"),
+                "title": f"{test_name_safe}_report.html"
+            }
+
+            # Update the data-jsonblob attribute
+            new_data_container["data-jsonblob"] = json.dumps(new_json_data, separators=(',', ':'))
+
+            # Save individual report
+            report_path = os.path.join(reports_dir, f"{test_name_safe}_report.html")
+            with open(report_path, "w", encoding="utf-8") as f:
+                f.write(str(new_soup))
+
+            print(f"🧪 Generated: {report_path}")
+
+    print(f"\n✅ Done! Individual HTML reports generated in '{reports_dir}'")
+
+
+if __name__ == "__main__":
+    run_all_tests_and_generate_reports()
+
+
+
+# def generate_html_content(test_data):
+#     """Generate HTML content optimized for PDF rendering"""
+#
+#     # Determine colors based on outcome
+#     if test_data['outcome'] == 'passed':
+#         message_bg_color = '#e8f5e9'
+#         message_border_color = '#4CAF50'
+#         message_title = 'Success Details:'
+#     elif test_data['outcome'] == 'failed':
+#         message_bg_color = '#ffebee'
+#         message_border_color = '#f44336'
+#         message_title = 'Error Details:'
+#     elif test_data['outcome'] == 'skipped':
+#         message_bg_color = '#fff3e0'
+#         message_border_color = '#ff9800'
+#         message_title = 'Skipped Details:'
+#     else:
+#         message_bg_color = '#f5f5f5'
+#         message_border_color = '#9e9e9e'
+#         message_title = 'Details:'
+#
+#     html_content = f"""
+#     <!DOCTYPE html>
+#     <html>
+#     <head>
+#         <meta charset="UTF-8">
+#         <title>Test Report - {test_data['test_id']}</title>
+#         <style>
+#             @page {{
+#                 size: A4;
+#                 margin: 2cm;
+#             }}
+#             * {{
+#                 margin: 0;
+#                 padding: 0;
+#                 box-sizing: border-box;
+#             }}
+#             body {{
+#                 font-family: Arial, Helvetica, sans-serif;
+#                 font-size: 12pt;
+#                 line-height: 1.5;
+#             }}
+#             .header {{
+#                 background-color: #e0e0e0;
+#                 color: #333;
+#                 padding: 15px;
+#                 margin-bottom: 20px;
+#                 text-align: left;
+#             }}
+#             .header h1 {{
+#                 font-size: 20pt;
+#                 margin-bottom: 5px;
+#             }}
+#             .header p {{
+#                 font-size: 11pt;
+#                 margin: 0;
+#             }}
+#             h2 {{
+#                 color: #333;
+#                 font-size: 16pt;
+#                 margin: 20px 0 10px 0;
+#                 padding-bottom: 5px;
+#                 border-bottom: 2px solid #e0e0e0;
+#             }}
+#             table {{
+#                 width: 100%;
+#                 border-collapse: collapse;
+#                 margin: 10px 0 20px 0;
+#                 background-color: white;
+#             }}
+#             table th {{
+#                 background-color: #e0e0e0;
+#                 color: #333;
+#                 font-weight: bold;
+#                 text-align: left;
+#                 padding: 10px;
+#                 border: 1px solid #ddd;
+#                 width: 30%;
+#             }}
+#             table td {{
+#                 padding: 10px;
+#                 border: 1px solid #ddd;
+#                 text-align: left;
+#                 width: 70%;
+#             }}
+#             .passed {{
+#                 color: green;
+#                 font-weight: bold;
+#             }}
+#             .failed {{
+#                 color: red;
+#                 font-weight: bold;
+#             }}
+#             .skipped {{
+#                 color: orange;
+#                 font-weight: bold;
+#             }}
+#             .message-box {{
+#                 background-color: {message_bg_color};
+#                 padding: 15px;
+#                 margin: 20px 0;
+#                 border-left: 5px solid {message_border_color};
+#             }}
+#             .message-box h3 {{
+#                 color: {message_border_color};
+#                 font-size: 14pt;
+#                 margin: 0 0 10px 0;
+#             }}
+#             .message-box pre {{
+#                 font-family: Courier, monospace;
+#                 font-size: 10pt;
+#                 white-space: pre-wrap;
+#                 word-wrap: break-word;
+#                 margin: 0;
+#                 line-height: 1.4;
+#             }}
+#         </style>
+#     </head>
+#     <body>
+#         <div class="header">
+#             <h1>Test Report: {test_data['test_id']}</h1>
+#             <p>Generated: {test_data['timestamp']}</p>
+#         </div>
+#
+#         <h2>Test Details</h2>
+#         <table>
+#             <tr>
+#                 <th>Test ID</th>
+#                 <td>{test_data['test_id']}</td>
+#             </tr>
+#             <tr>
+#                 <th>Test Name</th>
+#                 <td>{test_data['test_name']}</td>
+#             </tr>
+#             <tr>
+#                 <th>Test Path</th>
+#                 <td>{test_data.get('nodeid', 'N/A')}</td>
+#             </tr>
+#             <tr>
+#                 <th>Status</th>
+#                 <td><span class="{test_data['outcome']}">{test_data['outcome'].upper()}</span></td>
+#             </tr>
+#             <tr>
+#                 <th>Duration</th>
+#                 <td>{test_data['duration']:.4f} seconds</td>
+#             </tr>
+#         </table>
+#
+#         <div class="message-box">
+#             <h3>{message_title}</h3>
+#             <pre>{test_data.get("message", "No message available")}</pre>
+#         </div>
+#     </body>
+#     </html>
+#     """
+#
+#     return html_content
+#
+#     #
+#     # with open(filename, 'w', encoding='utf-8') as f:
+#     #     f.write(html_content)
+#
+#
+#
+
+
+#
+# def generate_test_summary(item, report, test_id, message=""):
+#     """
+#     Generate a detailed and professional summary for any pytest test outcome.
+#     Handles: passed, failed, skipped, error, and unknown.
+#     """
+#
+#     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+#
+#     # Define outcome metadata (title + icon + default message)
+#     outcome_details = {
+#         "passed": {
+#             "status": "PASSED",
+#             "summary": (
+#                 f"The test case **{item.name}** passed successfully.\n"
+#                 "All validations met the acceptance criteria."
+#             ),
+#             "default_message": "Execution completed without issues."
+#         },
+#         "failed": {
+#             "status": "FAILED",
+#             "summary": (
+#                 f"The test case **{item.name}** failed.\n"
+#                 "The actual result did not match the expected outcome."
+#             ),
+#             "default_message": "Refer to assertion logs for failure details."
+#         },
+#         "skipped": {
+#             "status": "SKIPPED",
+#             "summary": (
+#                 f"The test case **{item.name}** was intentionally skipped.\n"
+#                 "Possible reasons: pending feature, environment limitation, or conditional skip."
+#             ),
+#             "default_message": "Skipped using pytest.skip or @pytest.mark.skip."
+#         },
+#         "error": {
+#             "status": "ERROR",
+#             "summary": (
+#                 f"The test case **{item.name}** encountered an unexpected error.\n"
+#                 "Likely due to an unhandled exception or runtime issue."
+#             ),
+#             "default_message": "Check traceback logs for detailed error information."
+#         },
+#         "unknown": {
+#             "status": "UNKNOWN ",
+#             "summary": (
+#                 f"The test case **{item.name}** produced an indeterminate result.\n"
+#                 "Outcome could not be confidently classified."
+#             ),
+#             "default_message": "Manual review required to determine status."
+#         }
+#     }
+#
+#     # Pick matching metadata or fallback
+#     details = outcome_details.get(report.outcome, {
+#         "status": "UNDEFINED 🌀",
+#         "summary": f"The test case **{item.name}** reported an undefined outcome.",
+#         "default_message": "Check your custom reporting logic or hooks."
+#     })
+#
+#     # Format final summary
+#     return f"""
+#     TEST EXECUTION COMPLETED - {test_id}
+#
+#     Test Name   : {item.name}
+#     Status      : {details['status']}
+#     Executed On : {current_time}
+#
+#     Summary:
+#     {details['summary']}
+#     {message or details['default_message']}
+#     """.strip()
